@@ -974,8 +974,39 @@
 <span id="968">968</span>
 <span id="969">969</span>
 <span id="970">970</span>
+<span id="971">971</span>
+<span id="972">972</span>
+<span id="973">973</span>
+<span id="974">974</span>
+<span id="975">975</span>
+<span id="976">976</span>
+<span id="977">977</span>
+<span id="978">978</span>
+<span id="979">979</span>
+<span id="980">980</span>
+<span id="981">981</span>
+<span id="982">982</span>
+<span id="983">983</span>
+<span id="984">984</span>
+<span id="985">985</span>
+<span id="986">986</span>
+<span id="987">987</span>
+<span id="988">988</span>
+<span id="989">989</span>
+<span id="990">990</span>
+<span id="991">991</span>
+<span id="992">992</span>
+<span id="993">993</span>
+<span id="994">994</span>
+<span id="995">995</span>
+<span id="996">996</span>
+<span id="997">997</span>
+<span id="998">998</span>
+<span id="999">999</span>
+<span id="1000">1000</span>
+<span id="1001">1001</span>
+<span id="1002">1002</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">not</span>(<span class="ident">test</span>), <span class="ident">no_std</span>)]</span>
-<span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">docsrs</span>, <span class="ident">feature</span>(<span class="ident">doc_cfg</span>))]</span>
 <span class="doccomment">//! Implement a somewhat convenient and somewhat efficient way to perform RPC</span>
 <span class="doccomment">//! in an embedded context.</span>
 <span class="doccomment">//!</span>
@@ -1093,13 +1124,13 @@
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">loom</span>)]</span>
 <span class="kw">use</span> <span class="ident">loom</span>::{
     <span class="ident">cell::UnsafeCell</span>,
-    <span class="ident">sync::atomic</span>::{<span class="ident">AtomicU8</span>, <span class="ident">AtomicUsize</span>},
+    <span class="ident">sync::atomic</span>::{<span class="ident">AtomicBool</span>, <span class="ident">AtomicU8</span>, <span class="ident">AtomicUsize</span>},
 };
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
 <span class="kw">use</span> <span class="ident">core</span>::{
     <span class="ident">cell::UnsafeCell</span>,
-    <span class="ident">sync::atomic</span>::{<span class="ident">AtomicU8</span>, <span class="ident">AtomicUsize</span>},
+    <span class="ident">sync::atomic</span>::{<span class="ident">AtomicBool</span>, <span class="ident">AtomicU8</span>, <span class="ident">AtomicUsize</span>},
 };
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Copy</span>)]</span>
@@ -1258,7 +1289,7 @@
 <span class="doccomment">///</span>
 <span class="doccomment">/// static CHANNEL: Channel&lt;Request,Response&gt; = Channel::new();</span>
 <span class="doccomment">///</span>
-<span class="doccomment">/// let (mut rq, mut rp) = unsafe {CHANNEL.split()};</span>
+<span class="doccomment">/// let (mut rq, mut rp) = CHANNEL.split().unwrap();</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// assert!(rq.state() == State::Idle);</span>
 <span class="doccomment">///</span>
@@ -1322,8 +1353,10 @@
 <span class="doccomment">///</span>
 <span class="doccomment">/// ```</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Channel</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-    <span class="ident">interchange</span>: <span class="ident">UnsafeCell</span><span class="op">&lt;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">states</span>: <span class="ident">AtomicU8</span>,
+    <span class="ident">data</span>: <span class="ident">UnsafeCell</span><span class="op">&lt;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">state</span>: <span class="ident">AtomicU8</span>,
+    <span class="ident">requester_claimed</span>: <span class="ident">AtomicBool</span>,
+    <span class="ident">responder_claimed</span>: <span class="ident">AtomicBool</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="ident">Channel</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>
@@ -1335,36 +1368,52 @@
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
     <span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="self">Self</span> {
         <span class="self">Self</span> {
-            <span class="ident">interchange</span>: <span class="ident">UnsafeCell::new</span>(<span class="ident">Message::None</span>),
-            <span class="ident">states</span>: <span class="ident">AtomicU8::new</span>(<span class="number">0</span>),
+            <span class="ident">data</span>: <span class="ident">UnsafeCell::new</span>(<span class="ident">Message::None</span>),
+            <span class="ident">state</span>: <span class="ident">AtomicU8::new</span>(<span class="number">0</span>),
+            <span class="ident">requester_claimed</span>: <span class="ident">AtomicBool::new</span>(<span class="bool-val">false</span>),
+            <span class="ident">responder_claimed</span>: <span class="ident">AtomicBool::new</span>(<span class="bool-val">false</span>),
         }
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">loom</span>)]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="self">Self</span> {
         <span class="self">Self</span> {
-            <span class="ident">interchange</span>: <span class="ident">UnsafeCell::new</span>(<span class="ident">Message::None</span>),
-            <span class="ident">states</span>: <span class="ident">AtomicU8::new</span>(<span class="number">0</span>),
+            <span class="ident">data</span>: <span class="ident">UnsafeCell::new</span>(<span class="ident">Message::None</span>),
+            <span class="ident">state</span>: <span class="ident">AtomicU8::new</span>(<span class="number">0</span>),
+            <span class="ident">requester_claimed</span>: <span class="ident">AtomicBool::new</span>(<span class="bool-val">false</span>),
+            <span class="ident">responder_claimed</span>: <span class="ident">AtomicBool::new</span>(<span class="bool-val">false</span>),
         }
     }
 
-    <span class="doccomment">/// Obtain both the requester and responder ends of the interchange</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// # Safety</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// The requester and responders returned can only be used if no other Requester or Responder</span>
-    <span class="doccomment">/// obtained from previous calls to `split` are use</span>
-    <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">split</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (<span class="ident">Requester</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">Responder</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) {
-        (
-            <span class="ident">Requester</span> {
-                <span class="ident">interchange</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">interchange</span>,
-                <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">states</span>,
-            },
-            <span class="ident">Responder</span> {
-                <span class="ident">interchange</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">interchange</span>,
-                <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">states</span>,
-            },
-        )
+    <span class="doccomment">/// Obtain the requester end of the channel if it hasn&#39;t been taken yet</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">requester</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Requester</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="self">self</span>
+            .<span class="ident">requester_claimed</span>
+            .<span class="ident">compare_exchange</span>(<span class="bool-val">false</span>, <span class="bool-val">true</span>, <span class="ident">Ordering::SeqCst</span>, <span class="ident">Ordering::SeqCst</span>)
+            .<span class="ident">is_ok</span>()
+        {
+            <span class="prelude-val">Some</span>(<span class="ident">Requester</span> { <span class="ident">channel</span>: <span class="self">self</span> })
+        } <span class="kw">else</span> {
+            <span class="prelude-val">None</span>
+        }
+    }
+
+    <span class="doccomment">/// Obtain the responder end of the channel if it hasn&#39;t been taken yet</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">responder</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Responder</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="self">self</span>
+            .<span class="ident">responder_claimed</span>
+            .<span class="ident">compare_exchange</span>(<span class="bool-val">false</span>, <span class="bool-val">true</span>, <span class="ident">Ordering::SeqCst</span>, <span class="ident">Ordering::SeqCst</span>)
+            .<span class="ident">is_ok</span>()
+        {
+            <span class="prelude-val">Some</span>(<span class="ident">Responder</span> { <span class="ident">channel</span>: <span class="self">self</span> })
+        } <span class="kw">else</span> {
+            <span class="prelude-val">None</span>
+        }
+    }
+
+    <span class="doccomment">/// Obtain both the requester and responder ends of the channel</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">split</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span>(<span class="ident">Requester</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">Responder</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>)<span class="op">&gt;</span> {
+        <span class="prelude-val">Some</span>((<span class="self">self</span>.<span class="ident">requester</span>()<span class="question-mark">?</span>, <span class="self">self</span>.<span class="ident">responder</span>()<span class="question-mark">?</span>))
     }
 }
 
@@ -1383,8 +1432,15 @@
 <span class="doccomment">/// For a `static` [`Channel`](Channel) or [`Interchange`](Interchange),</span>
 <span class="doccomment">/// the requester uses a `&#39;static` lifetime parameter</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Requester</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-    <span class="ident">interchange</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;i</span> <span class="ident">UnsafeCell</span><span class="op">&lt;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;i</span> <span class="ident">AtomicU8</span>,
+    <span class="ident">channel</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;i</span> <span class="ident">Channel</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>,
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Requester</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
+        <span class="self">self</span>.<span class="ident">channel</span>
+            .<span class="ident">requester_claimed</span>
+            .<span class="ident">store</span>(<span class="bool-val">false</span>, <span class="ident">Ordering::Release</span>);
+    }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="ident">Requester</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>
@@ -1394,50 +1450,51 @@
 {
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">fn</span> <span class="ident">transition</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">from</span>: <span class="ident">State</span>, <span class="ident">to</span>: <span class="ident">State</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">state</span>
+        <span class="self">self</span>.<span class="ident">channel</span>
+            .<span class="ident">state</span>
             .<span class="ident">compare_exchange</span>(<span class="ident">from</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">to</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::SeqCst</span>, <span class="ident">Ordering::SeqCst</span>)
             .<span class="ident">is_ok</span>()
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">interchange</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">get</span>()
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">data</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">get</span>()
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">interchange_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">get</span>()
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">data_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">get</span>()
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_interchange</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
-        <span class="ident">f</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">get</span>())
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_data</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
+        <span class="ident">f</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">get</span>())
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_interchange_mut</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
-        <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">get</span>())
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_data_mut</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
+        <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">get</span>())
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">loom</span>)]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_interchange</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
-        <span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">with</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">i</span>))
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_data</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
+        <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">with</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">i</span>))
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">loom</span>)]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_interchange_mut</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
-        <span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">with_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="ident">i</span>))
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_data_mut</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
+        <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">with_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="ident">i</span>))
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="doccomment">/// Current state of the interchange.</span>
+    <span class="doccomment">/// Current state of the channel.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// Informational only!</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// The responder may change this state between calls,</span>
     <span class="doccomment">/// internally atomics ensure correctness.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">state</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">State</span> {
-        <span class="ident">State::from</span>(<span class="self">self</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>))
+        <span class="ident">State::from</span>(<span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>))
     }
 
     <span class="doccomment">/// Send a request to the responder.</span>
@@ -1448,11 +1505,13 @@
     <span class="doccomment">/// If the RPC state is `Idle`, this always succeeds, else calling</span>
     <span class="doccomment">/// is a logic error and the request is returned.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">request</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">request</span>: <span class="kw-2">&amp;</span><span class="ident">Q</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Error</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="ident">State::Idle</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>) {
+        <span class="kw">if</span> <span class="ident">State::Idle</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>) {
             <span class="kw">unsafe</span> {
-                <span class="self">self</span>.<span class="ident">with_interchange_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="kw-2">*</span><span class="ident">i</span> <span class="op">=</span> <span class="ident">Message::from_rq</span>(<span class="ident">request</span>));
+                <span class="self">self</span>.<span class="ident">with_data_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="kw-2">*</span><span class="ident">i</span> <span class="op">=</span> <span class="ident">Message::from_rq</span>(<span class="ident">request</span>));
             }
-            <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">store</span>(<span class="ident">State::Requested</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::Release</span>);
+            <span class="self">self</span>.<span class="ident">channel</span>
+                .<span class="ident">state</span>
+                .<span class="ident">store</span>(<span class="ident">State::Requested</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::Release</span>);
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>)
@@ -1470,18 +1529,20 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">cancel</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Q</span><span class="op">&gt;</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
         <span class="comment">// we canceled before the responder was even aware of the request.</span>
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::Requested</span>, <span class="ident">State::CancelingRequested</span>) {
-            <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">store</span>(<span class="ident">State::Idle</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::Release</span>);
-            <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="kw">unsafe</span> {
-                <span class="self">self</span>.<span class="ident">with_interchange</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">i</span>.<span class="ident">rq_ref</span>().<span class="ident">clone</span>())
-            }));
+            <span class="self">self</span>.<span class="ident">channel</span>
+                .<span class="ident">state</span>
+                .<span class="ident">store</span>(<span class="ident">State::Idle</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::Release</span>);
+            <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_data</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">i</span>.<span class="ident">rq_ref</span>().<span class="ident">clone</span>()) }));
         }
 
         <span class="comment">// we canceled after the responder took the request, but before they answered.</span>
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::BuildingResponse</span>, <span class="ident">State::CancelingRequested</span>) {
             <span class="comment">// this may not yet be None in case the responder switched state to</span>
             <span class="comment">// BuildingResponse but did not take out the request yet.</span>
-            <span class="comment">// assert!(self.interchange.is_none());</span>
-            <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">store</span>(<span class="ident">State::Canceled</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::Release</span>);
+            <span class="comment">// assert!(self.data.is_none());</span>
+            <span class="self">self</span>.<span class="ident">channel</span>
+                .<span class="ident">state</span>
+                .<span class="ident">store</span>(<span class="ident">State::Canceled</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::Release</span>);
             <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
         }
 
@@ -1496,7 +1557,7 @@
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">response</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">A</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::Responded</span>, <span class="ident">State::Responded</span>) {
-            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">interchange</span>().<span class="ident">rp_ref</span>() })
+            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">data</span>().<span class="ident">rp_ref</span>() })
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>)
         }
@@ -1507,7 +1568,7 @@
     <span class="doccomment">/// This may be called multiple times.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">with_response</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">A</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">R</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::Responded</span>, <span class="ident">State::Responded</span>) {
-            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_interchange</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="ident">i</span>.<span class="ident">rp_ref</span>())) })
+            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_data</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="ident">i</span>.<span class="ident">rp_ref</span>())) })
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>)
         }
@@ -1522,7 +1583,7 @@
     <span class="comment">// it seems unnecessary to model this.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">take_response</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">A</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::Responded</span>, <span class="ident">State::Idle</span>) {
-            <span class="prelude-val">Some</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_interchange</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">i</span>.<span class="ident">rp_ref</span>().<span class="ident">clone</span>()) })
+            <span class="prelude-val">Some</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_data</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">i</span>.<span class="ident">rp_ref</span>().<span class="ident">clone</span>()) })
         } <span class="kw">else</span> {
             <span class="prelude-val">None</span>
         }
@@ -1542,7 +1603,7 @@
             <span class="op">|</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::BuildingRequest</span>, <span class="ident">State::BuildingRequest</span>)
         {
             <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="kw">unsafe</span> {
-                <span class="self">self</span>.<span class="ident">with_interchange_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> {
+                <span class="self">self</span>.<span class="ident">with_data_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> {
                     <span class="kw">if</span> <span class="op">!</span><span class="ident">i</span>.<span class="ident">is_request_state</span>() {
                         <span class="kw-2">*</span><span class="ident">i</span> <span class="op">=</span> <span class="ident">Message::from_rq</span>(<span class="kw-2">&amp;</span><span class="ident">Q::default</span>());
                     }
@@ -1566,22 +1627,22 @@
             <span class="op">|</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::BuildingRequest</span>, <span class="ident">State::BuildingRequest</span>)
         {
             <span class="kw">unsafe</span> {
-                <span class="self">self</span>.<span class="ident">with_interchange_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> {
+                <span class="self">self</span>.<span class="ident">with_data_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> {
                     <span class="kw">if</span> <span class="op">!</span><span class="ident">i</span>.<span class="ident">is_request_state</span>() {
                         <span class="kw-2">*</span><span class="ident">i</span> <span class="op">=</span> <span class="ident">Message::from_rq</span>(<span class="kw-2">&amp;</span><span class="ident">Q::default</span>());
                     }
                 })
             }
-            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">interchange_mut</span>().<span class="ident">rq_mut</span>() })
+            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">data_mut</span>().<span class="ident">rq_mut</span>() })
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>)
         }
     }
 
-    <span class="doccomment">/// Send a request that was already placed in the interchange using `request_mut` or</span>
+    <span class="doccomment">/// Send a request that was already placed in the channel using `request_mut` or</span>
     <span class="doccomment">/// `with_request_mut`.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">send_request</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Error</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="ident">State::BuildingRequest</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>)
+        <span class="kw">if</span> <span class="ident">State::BuildingRequest</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>)
             <span class="op">&amp;&amp;</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::BuildingRequest</span>, <span class="ident">State::Requested</span>)
         {
             <span class="prelude-val">Ok</span>(())
@@ -1597,8 +1658,15 @@
 <span class="doccomment">/// For a `static` [`Channel`](Channel) or [`Interchange`](Interchange),</span>
 <span class="doccomment">/// the responder uses a `&#39;static` lifetime parameter</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Responder</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-    <span class="ident">interchange</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;i</span> <span class="ident">UnsafeCell</span><span class="op">&lt;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;i</span> <span class="ident">AtomicU8</span>,
+    <span class="ident">channel</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;i</span> <span class="ident">Channel</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>,
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">Responder</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
+        <span class="self">self</span>.<span class="ident">channel</span>
+            .<span class="ident">responder_claimed</span>
+            .<span class="ident">store</span>(<span class="bool-val">false</span>, <span class="ident">Ordering::Release</span>);
+    }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> <span class="ident">Responder</span><span class="op">&lt;</span><span class="lifetime">&#39;i</span>, <span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>
@@ -1608,50 +1676,51 @@
 {
     <span class="attribute">#[<span class="ident">inline</span>]</span>
     <span class="kw">fn</span> <span class="ident">transition</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">from</span>: <span class="ident">State</span>, <span class="ident">to</span>: <span class="ident">State</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">state</span>
+        <span class="self">self</span>.<span class="ident">channel</span>
+            .<span class="ident">state</span>
             .<span class="ident">compare_exchange</span>(<span class="ident">from</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">to</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::SeqCst</span>, <span class="ident">Ordering::SeqCst</span>)
             .<span class="ident">is_ok</span>()
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">interchange</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">get</span>()
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">data</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">get</span>()
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">interchange_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
-        <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">get</span>()
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">data_mut</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span> {
+        <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">get</span>()
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_interchange</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
-        <span class="ident">f</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">get</span>())
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_data</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
+        <span class="ident">f</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">get</span>())
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_interchange_mut</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
-        <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">get</span>())
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_data_mut</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
+        <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">get</span>())
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">loom</span>)]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_interchange</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
-        <span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">with</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">i</span>))
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_data</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
+        <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">with</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">i</span>))
     }
 
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">loom</span>)]</span>
-    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_interchange_mut</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
-        <span class="self">self</span>.<span class="ident">interchange</span>.<span class="ident">with_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="ident">i</span>))
+    <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">with_data_mut</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">Message</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="ident">R</span> {
+        <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">data</span>.<span class="ident">with_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="ident">i</span>))
     }
 
     <span class="attribute">#[<span class="ident">inline</span>]</span>
-    <span class="doccomment">/// Current state of the interchange.</span>
+    <span class="doccomment">/// Current state of the channel.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// Informational only!</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// The responder may change this state between calls,</span>
     <span class="doccomment">/// internally atomics ensure correctness.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">state</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">State</span> {
-        <span class="ident">State::from</span>(<span class="self">self</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>))
+        <span class="ident">State::from</span>(<span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>))
     }
 
     <span class="doccomment">/// If there is a request waiting, perform an operation with a reference to it</span>
@@ -1660,7 +1729,7 @@
     <span class="doccomment">/// If you need copies, use `take_request`</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">with_request</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw">impl</span> <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="ident">Q</span>) -&gt; <span class="ident">R</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">R</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::Requested</span>, <span class="ident">State::BuildingResponse</span>) {
-            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_interchange</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="ident">i</span>.<span class="ident">rq_ref</span>())) })
+            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_data</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">f</span>(<span class="ident">i</span>.<span class="ident">rq_ref</span>())) })
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>)
         }
@@ -1674,7 +1743,7 @@
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">request</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">Q</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::Requested</span>, <span class="ident">State::BuildingResponse</span>) {
-            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">interchange</span>().<span class="ident">rq_ref</span>() })
+            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">data</span>().<span class="ident">rq_ref</span>() })
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>)
         }
@@ -1686,7 +1755,7 @@
     <span class="doccomment">/// If you need copies, clone the request.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">take_request</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Q</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::Requested</span>, <span class="ident">State::BuildingResponse</span>) {
-            <span class="prelude-val">Some</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_interchange</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">i</span>.<span class="ident">rq_ref</span>().<span class="ident">clone</span>()) })
+            <span class="prelude-val">Some</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">with_data</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="ident">i</span>.<span class="ident">rq_ref</span>().<span class="ident">clone</span>()) })
         } <span class="kw">else</span> {
             <span class="prelude-val">None</span>
         }
@@ -1694,7 +1763,7 @@
 
     <span class="comment">// Check if requester attempted to cancel</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_canceled</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>) <span class="op">==</span> <span class="ident">State::Canceled</span> <span class="kw">as</span> <span class="ident">u8</span>
+        <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>) <span class="op">==</span> <span class="ident">State::Canceled</span> <span class="kw">as</span> <span class="ident">u8</span>
     }
 
     <span class="comment">// Acknowledge a cancel, thereby setting Channel to Idle state again.</span>
@@ -1702,6 +1771,7 @@
     <span class="comment">// It is a logic error to call this method if there is no pending cancellation.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">acknowledge_cancel</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Error</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="self">self</span>
+            .<span class="ident">channel</span>
             .<span class="ident">state</span>
             .<span class="ident">compare_exchange</span>(
                 <span class="ident">State::Canceled</span> <span class="kw">as</span> <span class="ident">u8</span>,
@@ -1723,11 +1793,13 @@
     <span class="doccomment">/// construct, use `with_response_mut` or `response_mut` and `send_response`.</span>
     <span class="doccomment">///</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">respond</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">response</span>: <span class="kw-2">&amp;</span><span class="ident">A</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Error</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="ident">State::BuildingResponse</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>) {
+        <span class="kw">if</span> <span class="ident">State::BuildingResponse</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>) {
             <span class="kw">unsafe</span> {
-                <span class="self">self</span>.<span class="ident">with_interchange_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="kw-2">*</span><span class="ident">i</span> <span class="op">=</span> <span class="ident">Message::from_rp</span>(<span class="ident">response</span>));
+                <span class="self">self</span>.<span class="ident">with_data_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> <span class="kw-2">*</span><span class="ident">i</span> <span class="op">=</span> <span class="ident">Message::from_rp</span>(<span class="ident">response</span>));
             }
-            <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">store</span>(<span class="ident">State::Responded</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::Release</span>);
+            <span class="self">self</span>.<span class="ident">channel</span>
+                .<span class="ident">state</span>
+                .<span class="ident">store</span>(<span class="ident">State::Responded</span> <span class="kw">as</span> <span class="ident">u8</span>, <span class="ident">Ordering::Release</span>);
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>)
@@ -1748,7 +1820,7 @@
             <span class="op">|</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::BuildingResponse</span>, <span class="ident">State::BuildingResponse</span>)
         {
             <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="kw">unsafe</span> {
-                <span class="self">self</span>.<span class="ident">with_interchange_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> {
+                <span class="self">self</span>.<span class="ident">with_data_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> {
                     <span class="kw">if</span> <span class="op">!</span><span class="ident">i</span>.<span class="ident">is_response_state</span>() {
                         <span class="kw-2">*</span><span class="ident">i</span> <span class="op">=</span> <span class="ident">Message::from_rp</span>(<span class="kw-2">&amp;</span><span class="ident">A::default</span>());
                     }
@@ -1772,22 +1844,22 @@
             <span class="op">|</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::BuildingResponse</span>, <span class="ident">State::BuildingResponse</span>)
         {
             <span class="kw">unsafe</span> {
-                <span class="self">self</span>.<span class="ident">with_interchange_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> {
+                <span class="self">self</span>.<span class="ident">with_data_mut</span>(<span class="op">|</span><span class="ident">i</span><span class="op">|</span> {
                     <span class="kw">if</span> <span class="op">!</span><span class="ident">i</span>.<span class="ident">is_response_state</span>() {
                         <span class="kw-2">*</span><span class="ident">i</span> <span class="op">=</span> <span class="ident">Message::from_rp</span>(<span class="kw-2">&amp;</span><span class="ident">A::default</span>());
                     }
                 })
             }
-            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">interchange_mut</span>().<span class="ident">rp_mut</span>() })
+            <span class="prelude-val">Ok</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">data_mut</span>().<span class="ident">rp_mut</span>() })
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">Error</span>)
         }
     }
 
-    <span class="doccomment">/// Send a response that was already placed in the interchange using `response_mut` or</span>
+    <span class="doccomment">/// Send a response that was already placed in the channel using `response_mut` or</span>
     <span class="doccomment">/// `with_response_mut`.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">send_response</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">Error</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="ident">State::BuildingResponse</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>)
+        <span class="kw">if</span> <span class="ident">State::BuildingResponse</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">channel</span>.<span class="ident">state</span>.<span class="ident">load</span>(<span class="ident">Ordering::Acquire</span>)
             <span class="op">&amp;&amp;</span> <span class="self">self</span>.<span class="ident">transition</span>(<span class="ident">State::BuildingResponse</span>, <span class="ident">State::Responded</span>)
         {
             <span class="prelude-val">Ok</span>(())
@@ -1831,7 +1903,7 @@
 <span class="doccomment">/// }</span>
 <span class="doccomment">/// ```</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Interchange</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span>, <span class="kw">const</span> <span class="ident">N</span>: <span class="ident">usize</span><span class="op">&gt;</span> {
-    <span class="ident">interchanges</span>: [<span class="ident">Channel</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>; <span class="ident">N</span>],
+    <span class="ident">channels</span>: [<span class="ident">Channel</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>; <span class="ident">N</span>],
     <span class="ident">last_claimed</span>: <span class="ident">AtomicUsize</span>,
 }
 
@@ -1846,7 +1918,7 @@
     <span class="doccomment">/// [`interchange`](crate::interchange) macro can be used instead.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="self">Self</span> {
         <span class="self">Self</span> {
-            <span class="ident">interchanges</span>: <span class="ident">core::array::from_fn</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">Default::default</span>()),
+            <span class="ident">channels</span>: <span class="ident">core::array::from_fn</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">Default::default</span>()),
             <span class="ident">last_claimed</span>: <span class="ident">AtomicUsize::new</span>(<span class="number">0</span>),
         }
     }
@@ -1856,39 +1928,31 @@
     <span class="comment">// - Inline const expressions: https://github.com/rust-lang/rust/issues/76001</span>
     <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">loom</span>))]</span>
     <span class="attribute">#[<span class="ident">doc</span>(<span class="ident">hidden</span>)]</span>
-    <span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">const_new</span>(<span class="ident">interchanges</span>: [<span class="ident">Channel</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>; <span class="ident">N</span>]) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">const_new</span>(<span class="ident">channels</span>: [<span class="ident">Channel</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>; <span class="ident">N</span>]) -&gt; <span class="self">Self</span> {
         <span class="self">Self</span> {
-            <span class="ident">interchanges</span>,
+            <span class="ident">channels</span>,
             <span class="ident">last_claimed</span>: <span class="ident">AtomicUsize::new</span>(<span class="number">0</span>),
         }
-    }
-
-    <span class="doccomment">/// Resets the claims, so that an previously claimed interchange can be claimed again.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// This method should only be used in tests and is therefore beind the `reset-claims` feature flag.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// # Safety</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// This function is safe to call if and only if all requesters and responders obtained by calls</span>
-    <span class="doccomment">/// to [claim()](Self::claim) have been dropped.</span>
-    <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;reset-claims&quot;</span>)]</span>
-    <span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">docsrs</span>, <span class="ident">doc</span>(<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;reset-claims&quot;</span>)))]</span>
-    <span class="kw">pub</span> <span class="kw">unsafe</span> <span class="kw">fn</span> <span class="ident">reset_claims</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="self">self</span>.<span class="ident">last_claimed</span>
-            .<span class="ident">store</span>(<span class="number">0</span>, <span class="ident">core::sync::atomic::Ordering::SeqCst</span>);
     }
 
     <span class="doccomment">/// Claim one of the channels of the interchange. Returns None if called more than `N` times.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">claim</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span>(<span class="ident">Requester</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>, <span class="ident">Responder</span><span class="op">&lt;</span><span class="ident">Q</span>, <span class="ident">A</span><span class="op">&gt;</span>)<span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">index</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">last_claimed</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Ordering::SeqCst</span>);
-        <span class="kw">if</span> <span class="ident">index</span> <span class="op">&gt;</span><span class="op">=</span> <span class="ident">N</span> {
-            <span class="comment">// FIXME: This technically unsound if many calls to claim() happen in parrallel,</span>
-            <span class="comment">// last_claimed can still overflow</span>
-            <span class="self">self</span>.<span class="ident">last_claimed</span>.<span class="ident">fetch_sub</span>(<span class="number">1</span>, <span class="ident">Ordering::SeqCst</span>);
-            <span class="prelude-val">None</span>
-        } <span class="kw">else</span> {
-            <span class="prelude-val">Some</span>(<span class="kw">unsafe</span> { <span class="self">self</span>.<span class="ident">interchanges</span>[<span class="ident">index</span>].<span class="ident">split</span>() })
+
+        <span class="kw">for</span> <span class="ident">i</span> <span class="kw">in</span> (<span class="ident">index</span> <span class="op">%</span> <span class="ident">N</span>)..<span class="ident">N</span> {
+            <span class="kw">let</span> <span class="ident">tmp</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">channels</span>[<span class="ident">i</span>].<span class="ident">split</span>();
+            <span class="kw">if</span> <span class="ident">tmp</span>.<span class="ident">is_some</span>() {
+                <span class="kw">return</span> <span class="ident">tmp</span>;
+            }
         }
+
+        <span class="kw">for</span> <span class="ident">i</span> <span class="kw">in</span> <span class="number">0</span>..(<span class="ident">index</span> <span class="op">%</span> <span class="ident">N</span>) {
+            <span class="kw">let</span> <span class="ident">tmp</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">channels</span>[<span class="ident">i</span>].<span class="ident">split</span>();
+            <span class="kw">if</span> <span class="ident">tmp</span>.<span class="ident">is_some</span>() {
+                <span class="kw">return</span> <span class="ident">tmp</span>;
+            }
+        }
+        <span class="prelude-val">None</span>
     }
 
     <span class="doccomment">/// Number of clients remaining to claim</span>
