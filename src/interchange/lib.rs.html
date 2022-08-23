@@ -1006,6 +1006,10 @@
 <span id="1000">1000</span>
 <span id="1001">1001</span>
 <span id="1002">1002</span>
+<span id="1003">1003</span>
+<span id="1004">1004</span>
+<span id="1005">1005</span>
+<span id="1006">1006</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">not</span>(<span class="ident">test</span>), <span class="ident">no_std</span>)]</span>
 <span class="doccomment">//! Implement a somewhat convenient and somewhat efficient way to perform RPC</span>
 <span class="doccomment">//! in an embedded context.</span>
@@ -1972,6 +1976,10 @@
 }
 
 <span class="doccomment">/// Create a [Interchange](Interchange) in a `const` context</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// This is macro is a hack around limitations with `const` and generics in the rust compiler.</span>
+<span class="doccomment">/// [Interchange::new()](Interchange::new) will be made const when the necessary compiler features</span>
+<span class="doccomment">/// are stabilized.</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// ```</span>
 <span class="doccomment">/// # #![cfg(not(loom))]</span>
