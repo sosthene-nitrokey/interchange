@@ -1,3 +1,4 @@
-var sourcesIndex = {};
-sourcesIndex["interchange"] = {"name":"","files":["lib.rs"]};
+var sourcesIndex = JSON.parse('{\
+"interchange":["",[],["lib.rs","macros.rs"]]\
+}');
 createSourceSidebar();
