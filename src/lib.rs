@@ -407,6 +407,22 @@ impl<Rq, Rp> Channel<Rq, Rp> {
             .compare_exchange(from as u8, to as u8, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
     }
+
+    /// Cancel an ongoing request.
+    /// Equivalent to [`Requester::cancel`][], but only requires a shared reference to the [`Channel`][]
+    pub fn interrupt(&self) -> bool {
+        // we canceled before the responder was even aware of the request.
+        if self.transition(State::Requested, State::Idle) {
+            return true;
+        }
+
+        // we canceled after the responder took the request, but before they answered.
+        if self.transition(State::BuildingResponse, State::Canceled) {
+            return true;
+        }
+
+        false
+    }
 }
 
 impl<Rq, Rp> Default for Channel<Rq, Rp> {
@@ -750,17 +766,7 @@ impl<'i, Rq, Rp> Responder<'i, Rq, Rp> {
     //
     // It is a logic error to call this method if there is no pending cancellation.
     pub fn acknowledge_cancel(&self) -> Result<(), Error> {
-        if self
-            .channel
-            .state
-            .compare_exchange(
-                State::Canceled as u8,
-                State::Idle as u8,
-                Ordering::SeqCst,
-                Ordering::SeqCst,
-            )
-            .is_ok()
-        {
+        if self.channel.transition(State::Canceled, State::Idle) {
             Ok(())
         } else {
             Err(Error)

@@ -13,3 +13,7 @@ categories = ["development-tools", "embedded"]
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.5"
+
+[profile.dev.package.loom]
+opt-level = 3
+
