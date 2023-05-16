@@ -12,7 +12,7 @@ use std::sync::atomic::{
 };
 
 #[allow(deprecated)]
-static BRANCHES_USED: [AtomicBool; 8] = [ATOMIC_BOOL_INIT; 8];
+static BRANCHES_USED: [AtomicBool; 9] = [ATOMIC_BOOL_INIT; 9];
 
 #[test]
 fn loom_interchange() {
@@ -67,7 +67,10 @@ fn requester_thread(mut requester: Requester<'static, u64, u64>) -> Option<()> {
 }
 
 fn responder_thread(mut responder: Responder<'static, u64, u64>) -> Option<()> {
-    let req = responder.take_request()?;
+    let req = responder.take_request().or_else(|| {
+        BRANCHES_USED[8].store(true, Release);
+        None
+    })?;
     assert_eq!(req, 53);
     responder.respond(req + 10).unwrap();
     thread::yield_now();
