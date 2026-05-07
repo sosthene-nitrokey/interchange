@@ -171,6 +171,9 @@ impl From<u8> for State {
     }
 }
 
+/// Callback that can be called
+pub type Callback = fn();
+
 // the repr(u8) is necessary so MaybeUninit::zeroized.assume_init() is valid and corresponds to
 // None
 #[repr(u8)]
@@ -361,7 +364,10 @@ impl<Rq, Rp> Channel<Rq, Rp> {
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
-            Some(Requester { channel: self })
+            Some(Requester {
+                channel: self,
+                callback: || {},
+            })
         } else {
             None
         }
@@ -376,7 +382,10 @@ impl<Rq, Rp> Channel<Rq, Rp> {
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
-            Some(Responder { channel: self })
+            Some(Responder {
+                channel: self,
+                callback: || {},
+            })
         } else {
             None
         }
@@ -408,6 +417,7 @@ impl<Rq, Rp> Default for Channel<Rq, Rp> {
 /// the requester uses a `'static` lifetime parameter
 pub struct Requester<'i, Rq, Rp> {
     channel: &'i Channel<Rq, Rp>,
+    callback: Callback,
 }
 
 impl<Rq, Rp> Drop for Requester<'_, Rq, Rp> {
@@ -419,6 +429,10 @@ impl<Rq, Rp> Drop for Requester<'_, Rq, Rp> {
 }
 
 impl<'i, Rq, Rp> Requester<'i, Rq, Rp> {
+    pub fn callback_mut(&mut self) -> &mut Callback {
+        &mut self.callback
+    }
+
     pub fn channel(&self) -> &'i Channel<Rq, Rp> {
         self.channel
     }
@@ -479,6 +493,7 @@ impl<'i, Rq, Rp> Requester<'i, Rq, Rp> {
             self.channel
                 .state
                 .store(State::Requested as u8, Ordering::Release);
+            (self.callback)();
             Ok(())
         } else {
             Err(Error)
@@ -503,6 +518,7 @@ impl<'i, Rq, Rp> Requester<'i, Rq, Rp> {
         }
 
         if self.channel.transition(State::Requested, State::Idle) {
+            (self.callback)();
             // we canceled before the responder was even aware of the request.
             return Ok(Some(unsafe { self.with_data_mut(|i| i.take_rq()) }));
         }
@@ -611,6 +627,7 @@ where
                 .channel
                 .transition(State::BuildingRequest, State::Requested)
         {
+            (self.callback)();
             Ok(())
         } else {
             // logic error
@@ -625,6 +642,7 @@ where
 /// the responder uses a `'static` lifetime parameter
 pub struct Responder<'i, Rq, Rp> {
     channel: &'i Channel<Rq, Rp>,
+    callback: Callback,
 }
 
 impl<Rq, Rp> Drop for Responder<'_, Rq, Rp> {
@@ -636,6 +654,10 @@ impl<Rq, Rp> Drop for Responder<'_, Rq, Rp> {
 }
 
 impl<'i, Rq, Rp> Responder<'i, Rq, Rp> {
+    pub fn callback_mut(&mut self) -> &mut Callback {
+        &mut self.callback
+    }
+
     pub fn channel(&self) -> &'i Channel<Rq, Rp> {
         self.channel
     }
@@ -758,6 +780,7 @@ impl<'i, Rq, Rp> Responder<'i, Rq, Rp> {
                 .channel
                 .transition(State::BuildingResponse, State::Responded)
             {
+                (self.callback)();
                 Ok(())
             } else {
                 Err(Error)
@@ -832,6 +855,7 @@ where
                 .channel
                 .transition(State::BuildingResponse, State::Responded)
         {
+            (self.callback)();
             Ok(())
         } else {
             // logic error
